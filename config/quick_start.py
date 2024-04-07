@@ -1,63 +1,64 @@
-import datetime
+import os
 import os.path
-
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from src.helpers.utils import print_green, print_red
+from src.helpers.common_functions import get_google_credentials, validate_calendar_account
+from src.helpers.common_constants import TOKEN_FILE
 
-# If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
-
-def main():
-    """Shows basic usage of the Google Calendar API.
-    Prints the start and name of the next 10 events on the user's calendar.
+def delete_token_file():
     """
-    creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists("config/.token.json"):
-        creds = Credentials.from_authorized_user_file(
-            "config/.token.json", SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "data/.credentials.json", SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open("data/.token.json", "w") as token:
-            token.write(creds.to_json())
+    Deletes the token file if it exists.
 
-    try:
-        service = build("calendar", "v3", credentials=creds)
+    This function checks if the token file exists at the path specified
+    by the TOKEN_FILE constant. If the file exists, it removes it.
 
-        # Call the Calendar API
-        now = datetime.datetime.utcnow().isoformat() + "Z"  
-        print("Getting the upcoming 10 events")
-        events_result = (
-            service.events()
-            .list(
-                calendarId="primary",
-                timeMin=now,
-                maxResults=10,
-                singleEvents=True,
-                orderBy="startTime",
-            )
-            .execute()
-        )
-        events = events_result.get("items", [])
-        return events
-
-    except HttpError as error:
-        print(f"An error occurred: {error}")
+    Returns:
+        None
+    """
+    if os.path.exists(TOKEN_FILE):
+        os.remove(TOKEN_FILE)
 
 
-if __name__ == "__main__":
-    main()
+def config_main():
+    """
+    Main function for configuring Google Calendar credentials.
+
+    This function is responsible for configuring Google Calendar credentials
+    by deleting any existing token files, obtaining new credentials, and validating
+    the user's calendar account.
+
+    Returns:
+        None
+    """
+    delete_token_file()
+    creds = get_google_credentials()
+    validate_calendar_account(creds)
+    print_green("System was configured successfully")
+
+
+def check_config_connection():
+    """
+    Checks the connection to the Google Calendar API.
+
+    This function verifies if the token file exists. If the file exists,
+    it attempts to retrieve credentials and establish a connection to the
+    Google Calendar API. It prints a success message if the connection is
+    successful, otherwise, it prints an error message.
+
+    Returns:
+        None
+    """
+    if os.path.exists(TOKEN_FILE):
+        creds = get_google_credentials()
+        if creds:
+            try:
+                service = build("calendar", "v3", credentials=creds)
+                print_green("Connection to Google Calendar API successful.")
+            except HttpError as error:
+                print_red(f"An error occurred: {error}")
+                print_red("Not connected to Google Calendar API.")
+    else:
+        print_red(f"Token file '{TOKEN_FILE}' does not exist.")
+        print_red("Not connected to Google Calendar API.")
